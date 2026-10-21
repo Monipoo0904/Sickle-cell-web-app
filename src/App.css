@@ -1,0 +1,89 @@
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1rem 2.5rem;
+  text-align: left;
+}
+
+.header {
+  margin-bottom: 1.25rem;
+}
+
+.eyebrow {
+  color: #c084fc;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0.4rem 0 0.5rem;
+}
+
+.subtitle a {
+  color: inherit;
+}
+
+.controls {
+  margin-bottom: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.control-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.control-row input {
+  flex: 1;
+}
+
+input,
+button {
+  font: inherit;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  background: #111827;
+  color: #e5e7eb;
+  padding: 0.55rem 0.7rem;
+}
+
+button {
+  cursor: pointer;
+  background: #7c3aed;
+  border-color: #7c3aed;
+}
+
+.viewer-card {
+  border: 1px solid #2e303a;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #111217;
+}
+
+.viewer-frame {
+  display: block;
+  width: 100%;
+  height: min(75vh, 760px);
+  border: 0;
+}
+
+.notes {
+  margin-top: 1.25rem;
+}
+
+.notes h2 {
+  margin-bottom: 0.3rem;
+}
+
+.status {
+  font-size: 0.9rem;
+  color: #9ca3af;
+}
+
+.notes ol {
+  margin: 0;
+  padding-left: 1.2rem;
+}
