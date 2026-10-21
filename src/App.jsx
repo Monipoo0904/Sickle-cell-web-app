@@ -1,88 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Stage } from 'ngl'
 import './App.css'
+import { analyzeStructure, buildNotes, mutationSelection, sickleCellBackground } from './notes'
 
 const alphaFoldResultPage = 'https://alphafoldserver.com/fold/54a0c496b62b0ab6'
-const fallbackModelUrl = '/models/1AAY.pdb'
+const fallbackModelUrl = '/models/2HBS.pdb'
 
-const defaultCliffnotes = [
-  'This structure shows a compact, folded protein with a clear three-dimensional arrangement.',
-  'The shape suggests a stable tertiary structure rather than a loose or partially unfolded chain.',
-  'Secondary-structure cues help explain how the molecule might bind or interact with partners in its biological context.',
-]
+function addRepresentations(component, analysis) {
+  component.addRepresentation('cartoon', { colorScheme: 'bfactor' })
+  component.addRepresentation('ball+stick', { sele: 'hetero and not water' })
 
-function summarizeStructure(text, fileName = 'uploaded structure') {
-  const normalizedText = text.replace(/\r/g, '')
-  const lines = normalizedText.split('\n')
-  const atomRecords = lines.filter((line) => line.startsWith('ATOM') || line.startsWith('HETATM'))
-  const helixRecords = lines.filter((line) => line.startsWith('HELIX'))
-  const sheetRecords = lines.filter((line) => line.startsWith('SHEET'))
-
-  const chainSet = new Set()
-  const residueSet = new Set()
-  const elementCounts = {}
-
-  atomRecords.forEach((line) => {
-    const chain = (line.slice(21, 22) || '').trim() || 'A'
-    const residueCode = `${chain}:${(line.slice(22, 27) || '').trim()}:${(line.slice(17, 20) || '').trim()}`
-    const element = (line.slice(76, 78) || '').trim() || 'C'
-
-    chainSet.add(chain)
-    residueSet.add(residueCode)
-    elementCounts[element] = (elementCounts[element] || 0) + 1
-  })
-
-  const atomCount = atomRecords.length
-  const residueCount = residueSet.size
-  const chainCount = chainSet.size
-  const helixCount = helixRecords.length
-  const sheetCount = sheetRecords.length
-
-  const foldType =
-    helixCount > 0 && sheetCount > 0
-      ? 'mixed alpha/beta fold'
-      : helixCount > 0
-        ? 'helical fold'
-        : sheetCount > 0
-          ? 'beta-rich fold'
-          : 'compact globular fold'
-
-  const dominantElement = Object.entries(elementCounts).sort((a, b) => b[1] - a[1])[0]
-  const elementLabel = dominantElement ? `${dominantElement[0]} atoms dominate` : 'carbon-rich scaffold'
-
-  const insight =
-    chainCount > 1
-      ? 'This model includes multiple chains, so the arrangement likely reflects a multi-chain assembly or interaction surface.'
-      : 'This model is a single-chain structure, indicating a folded unit with a clear internal architecture.'
-
-  const structuralNote =
-    helixCount > 0 && sheetCount > 0
-      ? 'The molecule combines helices and strands, which is a classic sign of a structured, biologically active domain.'
-      : helixCount > 0
-        ? 'The structure is dominated by helical segments, suggesting a stable, tightly packed protein fold.'
-        : sheetCount > 0
-          ? 'The structure is sheet-heavy, which often points to extended beta architecture and rigid packing.'
-          : 'The structure appears highly folded and compact, with geometry that favors a stable tertiary arrangement.'
-
-  const bullets = [
-    `${fileName}: ${atomCount} modeled atoms across ${chainCount} chain${chainCount === 1 ? '' : 's'} and ${residueCount} unique residue positions.`,
-    `Fold profile: ${foldType}.`,
-    `Secondary structure: ${helixCount} helix segment(s), ${sheetCount} sheet segment(s).`,
-    `Structural cue: ${elementLabel}.`,
-    `Class takeaway: ${insight}`,
-    `Shareable explanation: ${structuralNote}`,
-  ]
-
-  return {
-    title: 'Viewer cliffnotes',
-    bullets,
-    foldType,
-    atomCount,
-    residueCount,
-    chainCount,
-    helixCount,
-    sheetCount,
+  const mutationSele = mutationSelection(analysis)
+  if (mutationSele) {
+    component.addRepresentation('ball+stick', { sele: mutationSele, color: 'red', radiusScale: 2 })
+    component.addRepresentation('label', {
+      sele: `(${mutationSele}) and .CA`,
+      labelType: 'res',
+      color: 'white',
+      zOffset: 2,
+      fixedSize: true,
+      radiusScale: 1.2,
+    })
   }
+  component.autoView()
 }
 
 function App() {
@@ -90,70 +30,52 @@ function App() {
   const stageRef = useRef(null)
   const [structureUrl, setStructureUrl] = useState(fallbackModelUrl)
   const [status, setStatus] = useState('Loading default model...')
-  const [cliffnotes, setCliffnotes] = useState(defaultCliffnotes)
+  const [notes, setNotes] = useState(null)
+  const [copied, setCopied] = useState(false)
 
-  const updateCliffnotes = useCallback((text, fileLabel = 'uploaded structure') => {
-    const summary = summarizeStructure(text, fileLabel)
-    setCliffnotes(summary.bullets)
+  const loadStructure = useCallback(async (source, label, ext) => {
+    if (!stageRef.current) {
+      return false
+    }
+    const stage = stageRef.current
+    stage.removeAllComponents()
+    const component = await stage.loadFile(source, ext ? { ext } : undefined)
+    const analysis = analyzeStructure(component.structure, label)
+    addRepresentations(component, analysis)
+    setNotes(buildNotes(analysis))
+    setCopied(false)
+    return true
   }, [])
 
   const loadFromUrl = useCallback(
     async (url) => {
-      if (!stageRef.current) {
-        return
-      }
-
       setStatus('Loading structure...')
       try {
-        const stage = stageRef.current
-        const extensionMatch = url.match(/\.([a-z0-9]+)(?:\?|#|$)/i)
-        const ext = extensionMatch?.[1]
-        stage.removeAllComponents()
-        const component = await stage.loadFile(url, ext ? { ext } : undefined)
-        component.addRepresentation('cartoon', { colorScheme: 'bfactor' })
-        component.addRepresentation('ball+stick', { sele: 'hetero and not water' })
-        component.autoView()
-
-        const response = await fetch(url)
-        if (!response.ok) {
-          throw new Error('Could not fetch structure text for summary')
+        const ext = url.match(/\.([a-z0-9]+)(?:\?|#|$)/i)?.[1]
+        if (await loadStructure(url, url, ext)) {
+          setStatus(`Loaded structure: ${url}`)
         }
-
-        const text = await response.text()
-        updateCliffnotes(text, url)
-        setStatus(`Loaded structure: ${url}`)
       } catch {
         setStatus(
           'Could not load structure URL. Make sure it is a direct .cif/.pdb file and has public access.',
         )
       }
     },
-    [updateCliffnotes],
+    [loadStructure],
   )
 
   const loadFromFile = useCallback(
     async (file) => {
-      if (!stageRef.current || !file) {
-        return
-      }
-
       setStatus(`Loading file: ${file.name}...`)
       try {
-        const stage = stageRef.current
-        stage.removeAllComponents()
-        const component = await stage.loadFile(file, { ext: file.name.split('.').pop() })
-        component.addRepresentation('cartoon', { colorScheme: 'bfactor' })
-        component.addRepresentation('ball+stick', { sele: 'hetero and not water' })
-        component.autoView()
-
-        const text = await file.text()
-        updateCliffnotes(text, file.name)
-        setStatus(`Loaded file: ${file.name}`)
+        if (await loadStructure(file, file.name, file.name.split('.').pop())) {
+          setStatus(`Loaded file: ${file.name}`)
+        }
       } catch {
         setStatus('Could not parse the uploaded structure file.')
       }
     },
-    [updateCliffnotes],
+    [loadStructure],
   )
 
   useEffect(() => {
@@ -177,21 +99,22 @@ function App() {
     }
   }, [loadFromUrl])
 
-  useEffect(() => {
-    const loadDefaultSummary = async () => {
-      try {
-        const response = await fetch(fallbackModelUrl)
-        if (response.ok) {
-          const text = await response.text()
-          updateCliffnotes(text, 'default sample structure')
-        }
-      } catch {
-        setCliffnotes(defaultCliffnotes)
-      }
+  const copyTalkingPoints = async () => {
+    if (!notes) return
+    const text = [
+      'TALKING POINTS',
+      ...notes.talkingPoints.map((p, i) => `${i + 1}. ${p.heading}\n   Say: ${p.say}\n   Show: ${p.show}`),
+      '',
+      'EXAMPLE SCRIPT',
+      notes.exampleScript,
+    ].join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+    } catch {
+      setCopied(false)
     }
-
-    void loadDefaultSummary()
-  }, [updateCliffnotes])
+  }
 
   return (
     <main className="page">
@@ -241,11 +164,65 @@ function App() {
       <section className="viewer-card" aria-label="AlphaFold 3D viewer">
         <div ref={viewportRef} className="viewer-frame" />
       </section>
+      {notes?.isHemoglobin && (
+        <p className="legend">
+          <span className="swatch" /> Red sticks = beta-globin residue 6, the sickle cell mutation site.
+        </p>
+      )}
 
-      <section className="analysis-card" aria-label="Structure analysis and class notes">
-        <h2>Viewer cliffnotes for class</h2>
+      {notes && (
+        <>
+          <section className="stats" aria-label="Structure at a glance">
+            {notes.stats.map((stat) => (
+              <div className="stat" key={stat.label}>
+                <span className="stat-value">{stat.value}</span>
+                <span className="stat-label">{stat.label}</span>
+              </div>
+            ))}
+          </section>
+
+          <section className="analysis-card" aria-label="Structure cliff notes">
+            <h2>Cliff notes: this structure</h2>
+            <ul>
+              {notes.cliffnotes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="analysis-card" aria-label="Talking points">
+            <div className="section-head">
+              <h2>Talking points</h2>
+              <button type="button" onClick={() => void copyTalkingPoints()}>
+                {copied ? 'Copied!' : 'Copy talking points'}
+              </button>
+            </div>
+            <ol className="talking-points">
+              {notes.talkingPoints.map((point) => (
+                <li key={point.heading}>
+                  <strong>{point.heading}</strong>
+                  <p>
+                    <span className="tag">Say</span> “{point.say}”
+                  </p>
+                  <p>
+                    <span className="tag tag-show">Show</span> {point.show}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="analysis-card" aria-label="Example script">
+            <h2>Example script (about 90 seconds)</h2>
+            <blockquote className="script">{notes.exampleScript}</blockquote>
+          </section>
+        </>
+      )}
+
+      <section className="analysis-card" aria-label="Sickle cell background">
+        <h2>Cliff notes: sickle cell disease background</h2>
         <ul>
-          {cliffnotes.map((note) => (
+          {sickleCellBackground.map((note) => (
             <li key={note}>{note}</li>
           ))}
         </ul>
@@ -256,7 +233,8 @@ function App() {
         <ol>
           <li>Rotate/zoom the structure directly in the in-app 3D viewer.</li>
           <li>If your fold page is private, download the structure and upload it here.</li>
-          <li>Use the viewer cliffnotes above as a short class-ready explanation.</li>
+          <li>Walk through the talking points in order — each one says what to say and what to show.</li>
+          <li>Use the example script as a rehearsal guide, then put it in your own words.</li>
         </ol>
       </section>
     </main>

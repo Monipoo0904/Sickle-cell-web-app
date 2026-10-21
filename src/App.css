@@ -87,3 +87,90 @@ button {
   margin: 0;
   padding-left: 1.2rem;
 }
+
+.legend {
+  font-size: 0.9rem;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+}
+
+.stat {
+  border: 1px solid #2e303a;
+  border-radius: 10px;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.stat-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.analysis-card {
+  margin-top: 1.25rem;
+}
+
+.analysis-card li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.talking-points p {
+  margin: 0.3rem 0;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: #7c3aed;
+  color: #fff;
+  margin-right: 0.3rem;
+}
+
+.tag-show {
+  background: #374151;
+}
+
+.script {
+  margin: 0;
+  padding: 1rem;
+  border-left: 3px solid #c084fc;
+  background: #111827;
+  border-radius: 8px;
+  line-height: 1.6;
+}
